@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/build/
+
+# Data / scans (never commit real Agilink data)
+data/
+scans/
+*.sqlite3
+
+# Docker
+*.pid
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Alembic local sqlite (if ever used for quick tests)
+db/*.db
+
+# Real scanned fiches (real Agilink data — never commit, esp. to a public repo).
+# The blank template docs/fixtures/*VIERGE*.pdf is kept as a layout reference.
+/TapScanner*.pdf
+docs/fixtures/sample_filled_sheet.pdf

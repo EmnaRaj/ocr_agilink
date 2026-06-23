@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply text-slate-700 antialiased;
+  background-color: #f4f7fa;
+  background-image: radial-gradient(1100px 520px at 100% -12%, rgba(33, 122, 150, 0.06), transparent),
+    radial-gradient(820px 620px at -12% 112%, rgba(14, 91, 117, 0.045), transparent);
+  background-attachment: fixed;
+  font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+}
+
+/* premium thin scrollbars */
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300/70;
+}
+*::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400/70;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  /* ── Surfaces ─────────────────────────────────────────────── */
+  .card {
+    @apply rounded-2xl border border-slate-200/70 bg-white shadow-card;
+  }
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft;
+  }
+  .kpi-gradient {
+    background-image: linear-gradient(135deg, #ffffff 0%, #f7fbfc 100%);
+  }
+
+  /* ── Section headers ──────────────────────────────────────── */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-agilink-500/80;
+  }
+  .panel-title {
+    @apply text-sm font-semibold text-slate-700;
+  }
+  .panel-sub {
+    @apply text-xs text-slate-400;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition-all hover:opacity-95 hover:shadow-glow active:scale-[.98] disabled:opacity-40;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[.98];
+  }
+
+  /* ── Inputs ───────────────────────────────────────────────── */
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-700 transition-all placeholder:text-slate-400 focus:border-agilink-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-agilink-500/15;
+  }
+
+  /* ── Chips ────────────────────────────────────────────────── */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+
+  /* streaming caret */
+  .caret::after {
+    content: "▌";
+    @apply ml-0.5 text-agilink-400 animate-blink;
+  }
+}

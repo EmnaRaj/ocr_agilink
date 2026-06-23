@@ -1,0 +1,28 @@
+[project]
+name = "agilink-worker"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "celery[redis]>=5.4,<6",
+    "groq>=0.11,<1",       # cloud POC backend (VLM_BACKEND=groq)
+    "openai>=1.40,<2",     # self-hosted vLLM backend (VLM_BACKEND=vllm)
+    "pillow>=10.0,<12",    # crops the scan into focused region bands (regions.py)
+    "opencv-python-headless>=4.9,<5",  # deterministic image enhancement (preprocess.py)
+    "numpy>=1.26,<3",
+]
+# fiche-schema is installed separately as a local editable package
+# (see ../packages/fiche_schema); Phase 2 adds opencv-python, etc.
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["worker*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "black>=24.0",
+]
