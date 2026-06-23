@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,10 +10,18 @@ from .enums import StatutFiche
 
 class Fiche(Base):
     __tablename__ = "fiches"
+    # One fiche per page of a scan — guards against duplicate inserts if a
+    # durable batch task is redelivered (crash recovery / at-least-once).
+    __table_args__ = (UniqueConstraint("scan_id", "page_index", name="uq_fiche_scan_page"),)
 
     fiche_id: Mapped[int] = mapped_column(primary_key=True)
     of_id: Mapped[int] = mapped_column(ForeignKey("work_orders.of_id"), nullable=False)
     scan_id: Mapped[int | None] = mapped_column(ForeignKey("scans.scan_id"))
+    # Which page of the (possibly multi-fiche) source scan this fiche came from.
+    page_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Clockwise degrees (0/90/180/270) applied to upright the scan before
+    # extraction; the viewer re-applies it so the page is shown the right way up.
+    rotation: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     statut: Mapped[StatutFiche] = mapped_column(
         Enum(StatutFiche, name="statut_fiche"), nullable=False, default=StatutFiche.extrait
     )

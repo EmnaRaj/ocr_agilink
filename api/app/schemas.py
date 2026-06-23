@@ -42,6 +42,8 @@ class WorkOrderRef(BaseModel):
 class ScanRef(BaseModel):
     scan_id: int
     uploaded_at: datetime
+    page_index: int = 0
+    n_pages: int = 1
 
 
 class ValidationIssueOut(BaseModel):

@@ -18,9 +18,11 @@ node_modules/
 frontend/dist/
 frontend/build/
 
-# Data / scans (never commit real Agilink data)
+# Data / scans (never commit real Agilink data) — case-sensitive on Linux,
+# so cover the capitalised folder the scans actually live in too.
 data/
 scans/
+Scans/
 *.sqlite3
 
 # Docker

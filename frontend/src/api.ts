@@ -105,9 +105,21 @@ export interface FicheDetail {
   overall_confidence: number | null;
   product: { product_id: number; ref_produit: string; designation: string | null };
   work_order: { of_id: number; n_of: string; quantite: number | null };
-  scan: { scan_id: number; uploaded_at: string } | null;
+  scan: { scan_id: number; uploaded_at: string; page_index: number; n_pages: number } | null;
   extraction: Extraction | null;
   validation: ValidationIssue[];
+}
+
+export type ScanResult =
+  | { mode: "single"; scan_id: number; fiche_id: number; n_pages: number; statut: string }
+  | { mode: "batch"; scan_id: number; n_pages: number };
+
+export interface ScanStatus {
+  scan_id: number;
+  n_pages: number;
+  n_done: number;
+  done: boolean;
+  fiche_ids: number[];
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -158,7 +170,7 @@ export const api = {
       onToken(decoder.decode(value, { stream: true }));
     }
   },
-  scan: async (file: File): Promise<{ fiche_id: number }> => {
+  scan: async (file: File): Promise<ScanResult> => {
     const fd = new FormData();
     fd.append("file", file);
     const r = await fetch(`${BASE}/fiches/scan`, { method: "POST", body: fd });
@@ -168,4 +180,5 @@ export const api = {
     }
     return r.json();
   },
+  scanStatus: (scanId: number) => get<ScanStatus>(`/fiches/scan/${scanId}/status`),
 };

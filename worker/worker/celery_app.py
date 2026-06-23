@@ -6,3 +6,15 @@ redis_url = os.environ["REDIS_URL"]
 
 celery_app = Celery("agilink_worker", broker=redis_url, backend=redis_url)
 celery_app.autodiscover_tasks(["worker"])
+
+# Durability for long multi-page batches: if a worker is lost mid-task, requeue
+# it (combined with acks_late on the batch task + idempotent per-page resume).
+# prefetch=1 keeps a long batch from hogging other queued work.
+celery_app.conf.task_reject_on_worker_lost = True
+celery_app.conf.worker_prefetch_multiplier = 1
+# Redis redelivers an unacked task only after this window — so it's also the
+# worst-case crash-recovery delay for an in-flight batch. 30 min comfortably
+# exceeds a normal batch (~20 pages × ~1 min) yet recovers a crash reasonably
+# fast. The (scan_id, page_index) unique constraint makes any redelivery safe
+# even if it overlaps the original run.
+celery_app.conf.broker_transport_options = {"visibility_timeout": 30 * 60}

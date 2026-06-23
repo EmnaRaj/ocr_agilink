@@ -9,6 +9,15 @@ dependencies = [
     "pillow>=10.0,<12",    # crops the scan into focused region bands (regions.py)
     "opencv-python-headless>=4.9,<5",  # deterministic image enhancement (preprocess.py)
     "numpy>=1.26,<3",
+    # Multi-page batch task owns the full pipeline, so it needs DB + storage +
+    # PDF rendering. The `app` package is installed --no-deps (see Dockerfile),
+    # so its runtime deps are declared here.
+    "sqlalchemy>=2.0,<3",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic-settings>=2.4,<3",
+    "boto3>=1.34",
+    "pymupdf>=1.24,<2",
+    "pytesseract>=0.3.10",  # OSD orientation detection (needs tesseract-ocr binary)
 ]
 # fiche-schema is installed separately as a local editable package
 # (see ../packages/fiche_schema); Phase 2 adds opencv-python, etc.

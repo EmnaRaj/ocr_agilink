@@ -80,10 +80,13 @@ export default function FicheDetail() {
       <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-xl font-bold text-slate-800">{String(headerRef)}</h2>
               <StatutBadge statut={d.statut} />
               {!validated && <ConfidenceBadge value={d.overall_confidence} />}
+              {d.scan && d.scan.n_pages > 1 && (
+                <span className="chip bg-slate-100 text-slate-600">Page {d.scan.page_index + 1} / {d.scan.n_pages}</span>
+              )}
             </div>
             <p className="mt-1 text-sm text-slate-500">
               {d.product.designation || "Sans désignation"} · OF {d.work_order.n_of} · Qté {ex?.header.qte.value ?? d.work_order.quantite ?? "—"}
@@ -132,7 +135,9 @@ export default function FicheDetail() {
       {/* Scan + data */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <div className="card p-3 xl:sticky xl:top-0 xl:self-start">
-          <div className="mb-2 px-2 text-sm font-semibold text-slate-700">Document scanné</div>
+          <div className="mb-2 px-2 text-sm font-semibold text-slate-700">
+            Document scanné{d.scan && d.scan.n_pages > 1 ? ` — page ${d.scan.page_index + 1}` : ""}
+          </div>
           {d.scan ? (
             <a href={api.scanUrl(d.fiche_id)} target="_blank" rel="noreferrer">
               <img src={api.scanUrl(d.fiche_id)} alt="Fiche scannée" className="w-full rounded-lg border border-slate-100" />

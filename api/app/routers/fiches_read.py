@@ -120,7 +120,12 @@ def get_fiche(fiche_id: int, db: Session = Depends(get_db)) -> FicheDetail:
             designation=wo.product.designation,
         ),
         work_order=WorkOrderRef(of_id=wo.of_id, n_of=wo.n_of, quantite=wo.quantite),
-        scan=ScanRef(scan_id=fiche.scan.scan_id, uploaded_at=fiche.scan.uploaded_at)
+        scan=ScanRef(
+            scan_id=fiche.scan.scan_id,
+            uploaded_at=fiche.scan.uploaded_at,
+            page_index=fiche.page_index,
+            n_pages=fiche.scan.n_pages,
+        )
         if fiche.scan
         else None,
         extraction=fiche.raw_extraction,
@@ -137,8 +142,12 @@ def get_fiche_scan(fiche_id: int, db: Session = Depends(get_db)) -> Response:
     data, ctype = download_scan(fiche.scan.storage_url)
     if ctype == "application/pdf" or fiche.scan.storage_url.lower().endswith(".pdf"):
         doc = pymupdf.open(stream=data, filetype="pdf")
-        zoom = min(2200 / max(doc[0].rect.width, doc[0].rect.height), 4.0)
-        pix = doc.load_page(0).get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        idx = min(max(fiche.page_index, 0), doc.page_count - 1)  # this fiche's own page
+        page = doc.load_page(idx)
+        if fiche.rotation:  # show it upright, same as the extractor saw it
+            page.set_rotation((page.rotation + fiche.rotation) % 360)
+        zoom = min(2200 / max(page.rect.width, page.rect.height), 4.0)
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
         data, ctype = pix.tobytes("jpeg", jpg_quality=85), "image/jpeg"
     return Response(content=data, media_type=ctype, headers={"Cache-Control": "private, max-age=3600"})
 
