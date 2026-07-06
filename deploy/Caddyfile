@@ -1,0 +1,6 @@
+# Automatic HTTPS (Let's Encrypt) for your domain → the app.
+# Caddy obtains + renews the TLS certificate on its own; you just point DNS.
+{$DOMAIN} {
+    encode gzip
+    reverse_proxy frontend:80
+}
