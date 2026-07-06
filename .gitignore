@@ -54,3 +54,6 @@ inbox/processed/*.pdf
 inbox/processed/*.jpg
 inbox/processed/*.jpeg
 inbox/processed/*.png
+
+# client package build output
+/dist/

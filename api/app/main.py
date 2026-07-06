@@ -1,10 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
+from .db import init_db
 from .routers import analytics, chat, fiches, fiches_read, operations, stats
 
-app = FastAPI(title="Agilink Fiches Suiveuses API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure the schema + analytical views exist so a fresh deploy (the local
+    # test package) boots without a manual migration step. Idempotent.
+    init_db()
+    yield
+
+
+app = FastAPI(title="Agilink Fiches Suiveuses API", lifespan=lifespan)
 
 # The SPA is served from a different origin (Vite dev server / nginx container),
 # so allow it to call the API. Tighten allow_origins for a real deployment.
