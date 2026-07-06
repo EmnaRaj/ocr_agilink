@@ -16,7 +16,7 @@ dependencies = [
     "pymupdf>=1.24,<2",
     "openpyxl>=3.1,<4",   # Excel export
     "fpdf2>=2.7,<3",      # PDF export
-    "openai>=1.40,<2",    # chatbot (text-to-SQL via OpenRouter)
+    "pydantic-ai-slim[openai]>=2.0,<3",  # chatbot copilot — tool-calling agent (app/agent/)
 ]
 # fiche-schema is installed separately as a local editable package
 # (see ../packages/fiche_schema) — not declared here since it isn't published

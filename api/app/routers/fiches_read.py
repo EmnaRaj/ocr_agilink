@@ -6,8 +6,10 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from fiche_schema import is_auto_validatable, merge_extraction
+
 from ..db import get_db
-from ..models import Fiche, Product, StatutFiche, WorkOrder
+from ..models import Fiche, Partie, Product, StatutFiche, WorkOrder
 from ..schemas import (
     FicheDetail,
     FicheListItem,
@@ -17,6 +19,7 @@ from ..schemas import (
     WorkOrderRef,
 )
 from ..services import export as export_svc
+from ..services.ingest import diff_extraction, resync_fiche, save_correction
 from ..services.storage import download_scan
 
 router = APIRouter(prefix="/fiches", tags=["fiches"])
@@ -48,9 +51,12 @@ def _to_list_item(f: Fiche) -> FicheListItem:
         quantite=f.work_order.quantite,
         date_creation=f.date_creation,
         statut=f.statut.value,
+        auto_validated=bool(((f.raw_extraction or {}).get("meta") or {}).get("auto_validated")),
         overall_confidence=_overall_confidence(f),
         n_items=len(f.items),
-        n_operations=sum(1 for o in f.operations if o.applicable is not None),
+        n_operations=sum(
+            1 for o in f.rows if o.partie != Partie.controle and o.applicable is not None
+        ),
         has_scan=f.scan_id is not None,
     )
 
@@ -59,7 +65,7 @@ def _loaded(stmt):
     return stmt.options(
         joinedload(Fiche.work_order).joinedload(WorkOrder.product),
         selectinload(Fiche.items),
-        selectinload(Fiche.operations),
+        selectinload(Fiche.rows),
     )
 
 
@@ -72,10 +78,11 @@ def list_fiches(
     statut: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    archived: bool = Query(False, description="False = active fiches (default), True = archived only"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> FicheListResponse:
-    base = select(Fiche).join(Fiche.work_order).join(WorkOrder.product)
+    base = select(Fiche).join(Fiche.work_order).join(WorkOrder.product).where(Fiche.archived == archived)
     if q:
         like = f"%{q}%"
         base = base.where(or_(Product.ref_produit.ilike(like), WorkOrder.n_of.ilike(like)))
@@ -161,26 +168,174 @@ class FicheUpdate(BaseModel):
 def update_fiche(fiche_id: int, payload: FicheUpdate, db: Session = Depends(get_db)) -> dict:
     """Save user corrections to the extracted data, and optionally validate the fiche.
 
-    Validating clears the review flags, marks it human-validated (confidence 1.0)
-    and moves it to statut 'valide' — the clean, confirmed record.
+    Both paths re-run the deterministic checks against the corrected data and
+    re-sync the relational Operation/Control/Item rows (so analytics/exports
+    reflect the correction, not the original misread). Validating sets
+    overall_confidence to 1.0 and moves the fiche to statut 'valide', but
+    deliberately does NOT blank out remaining structural flags (e.g. a
+    matricule outlier the human didn't actually change) — a flag on a
+    validated fiche means "confirmed, but still worth a second look", not
+    "definitely wrong". Validating also promotes any matricule on the fiche
+    into the known-operator registry (find_or_create_operator), since it's
+    now human-confirmed.
     """
     fiche = db.get(Fiche, fiche_id)
     if fiche is None:
         raise HTTPException(404, f"Fiche {fiche_id} not found")
+    old_extraction = fiche.raw_extraction or {}
 
     ex = dict(payload.extraction)
     meta = dict(ex.get("meta") or {})
+    # merge_extraction (not a strict FicheExtraction.model_validate) so a
+    # human-typed correction gets the same lenient parsing as a VLM read —
+    # pydantic's native time/date parser rejects perfectly normal input like
+    # "8:30" (no leading zero) or "13h30"; a single bad cell degrades to
+    # null+raw_text instead of rejecting the whole save.
+    try:
+        extraction = merge_extraction(ex, model_name=meta.get("model_name") or "human", processing_ms=meta.get("processing_ms"))
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(400, f"Extraction invalide: {exc}") from exc
+
+    # Audited regardless of validate: an "automation rate" KPI needs to know
+    # whether ANY save on this fiche ever touched a value, not just whether
+    # the final validate click did.
+    db.add_all(diff_extraction(fiche, old_extraction, extraction))
+
     if payload.validate:
-        ex["validation"] = []
         meta["validated"] = True
         meta["overall_confidence"] = 1.0
         fiche.statut = StatutFiche.valide
+        issues = resync_fiche(db, fiche, extraction)
     else:
-        fiche.statut = StatutFiche.en_revue
+        issues = save_correction(db, fiche, extraction)
+        # Dynamic re-check: a correction that clears every BLOCKING alert (e.g.
+        # the reviewer just typed in the N° OF that was the lone error) validates
+        # the fiche on the spot — no separate "Valider" click needed. Remaining
+        # soft/advisory flags never block. If blockers remain, stay in review.
+        if is_auto_validatable(extraction, issues, 0.0):
+            meta["validated"] = True
+            meta["validated_via"] = "edit"
+            meta["overall_confidence"] = 1.0
+            fiche.statut = StatutFiche.valide
+        else:
+            fiche.statut = StatutFiche.en_revue
+
+    ex["validation"] = [i.model_dump() for i in issues]
     ex["meta"] = meta
     fiche.raw_extraction = ex  # reassigning a new dict marks the JSONB column dirty
     db.commit()
     return {"ok": True, "fiche_id": fiche_id, "statut": fiche.statut.value}
+
+
+@router.delete("/{fiche_id}")
+def delete_fiche(fiche_id: int, db: Session = Depends(get_db)) -> dict:
+    """Permanently delete a fiche and its operations/controls/items (cascade).
+
+    Leaves the WorkOrder/Product and the underlying Scan/MinIO file alone —
+    other fiches (other pages of the same multi-page scan, or sharing the
+    same work order) may still reference them. Deleting frees up this page's
+    (scan_id, page_index) slot, so re-running a batch on that scan will
+    re-extract it instead of skipping it as already-filed.
+    """
+    fiche = db.get(Fiche, fiche_id)
+    if fiche is None:
+        raise HTTPException(404, f"Fiche {fiche_id} not found")
+    db.delete(fiche)
+    db.commit()
+    return {"ok": True, "fiche_id": fiche_id}
+
+
+class FicheIds(BaseModel):
+    ids: list[int]
+
+
+class ArchiveRequest(FicheIds):
+    archived: bool = True
+
+
+class ResolveAlert(BaseModel):
+    key: str
+    resolved: bool = True
+
+
+def _alert_key(i: dict) -> str:
+    """Stable identifier for one coherence alert (must match the frontend's)."""
+    return "|".join(str(i.get(k, "")) for k in ("scope", "location", "field", "code"))
+
+
+@router.post("/{fiche_id}/resolve-alert")
+def resolve_alert(fiche_id: int, payload: ResolveAlert, db: Session = Depends(get_db)) -> dict:
+    """Mark one coherence alert as reviewed (confirmed/ignored) by a human, or
+    un-mark it. When EVERY alert on the fiche is resolved, the fiche is validated
+    (human-confirmed). Re-opening an alert on such a fiche sends it back to review.
+    This lets a reviewer clear false-positives one by one straight from the sheet.
+    """
+    fiche = db.get(Fiche, fiche_id)
+    if fiche is None:
+        raise HTTPException(404, f"Fiche {fiche_id} not found")
+    raw = dict(fiche.raw_extraction or {})
+    meta = dict(raw.get("meta") or {})
+    alerts = raw.get("validation") or []
+    all_keys = {_alert_key(i) for i in alerts}
+    # ERROR-level alerts (missing/invalid OF, ref…) are structural — they can't be
+    # dismissed by confirm/ignore, only fixed by editing the data. Only WARNING
+    # alerts are "resolvable" here.
+    errors_present = any(i.get("level") == "error" for i in alerts)
+    warning_keys = {_alert_key(i) for i in alerts if i.get("level") != "error"}
+    resolved = set(meta.get("resolved_alerts") or [])
+    if payload.resolved:
+        resolved.add(payload.key)
+    else:
+        resolved.discard(payload.key)
+    resolved &= all_keys  # drop stale keys from older validation runs
+    meta["resolved_alerts"] = sorted(resolved)
+
+    all_resolved = (not errors_present) and (warning_keys <= resolved)
+    if all_resolved:
+        fiche.statut = StatutFiche.valide
+        meta["validated"] = True
+        meta["validated_via"] = "alerts"
+        meta.pop("auto_validated", None)
+        meta["overall_confidence"] = 1.0
+    elif meta.get("validated_via") == "alerts" and fiche.statut == StatutFiche.valide:
+        # a previously alert-validated fiche had an alert re-opened → back to review
+        fiche.statut = StatutFiche.en_revue
+        meta.pop("validated", None)
+        meta.pop("validated_via", None)
+    raw["meta"] = meta
+    fiche.raw_extraction = raw
+    db.commit()
+    return {
+        "ok": True,
+        "resolved": len(resolved),
+        "total": len(warning_keys),
+        "all_resolved": all_resolved,
+        "statut": fiche.statut.value,
+    }
+
+
+@router.post("/bulk-delete")
+def bulk_delete(payload: FicheIds, db: Session = Depends(get_db)) -> dict:
+    """Permanently delete several fiches at once (same cascade as single delete)."""
+    n = 0
+    for fiche in db.query(Fiche).filter(Fiche.fiche_id.in_(payload.ids)).all():
+        db.delete(fiche)
+        n += 1
+    db.commit()
+    return {"ok": True, "deleted": n}
+
+
+@router.post("/bulk-archive")
+def bulk_archive(payload: ArchiveRequest, db: Session = Depends(get_db)) -> dict:
+    """Archive (or restore) several fiches — soft-hide from the default history
+    without deleting the data."""
+    n = (
+        db.query(Fiche)
+        .filter(Fiche.fiche_id.in_(payload.ids))
+        .update({Fiche.archived: payload.archived}, synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "archived": payload.archived, "count": n}
 
 
 @router.get("/{fiche_id}/export")

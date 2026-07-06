@@ -19,8 +19,16 @@ def run_extraction(image_bytes: bytes, mime_type: str = "image/png") -> dict:
     return async_result.get(timeout=EXTRACTION_TIMEOUT_S)
 
 
-def enqueue_scan_batch(scan_id: int) -> None:
+def enqueue_scan_batch(scan_id: int) -> str:
     """Fire-and-forget a durable multi-page batch. The worker owns the whole
     job (download → render → extract → persist per page) so it survives an
-    API/worker restart and resumes from the last unfinished page."""
-    _celery_client.send_task("worker.process_scan_batch", args=[scan_id])
+    API/worker restart and resumes from the last unfinished page. Returns the
+    Celery task id so the caller can store it (for stop/revoke)."""
+    return _celery_client.send_task("worker.process_scan_batch", args=[scan_id]).id
+
+
+def revoke_task(task_id: str | None) -> None:
+    """Stop a running/queued batch task. terminate=True interrupts the page in
+    flight; the cooperative status check makes any redelivery exit cleanly."""
+    if task_id:
+        _celery_client.control.revoke(task_id, terminate=True)

@@ -6,6 +6,7 @@ order/count for a fiche can never drift from the template.
 
 from __future__ import annotations
 
+import re
 from datetime import date, time
 
 from .extraction import (
@@ -191,9 +192,31 @@ _TABLE_FIELD_PARSERS = {
 }
 
 
+def _normalize_date_raw(text: str | None) -> str | None:
+    """Canonicalize a handwritten "day.month" reading to one canonical date form
+    — zero-padded with a slash, "DD/MM" — regardless of whether the writer (or
+    the model copying it) used ".", "/" or "-". They're the same date, but a
+    table mixing separators/padding row to row reads as an error even when every
+    cell was individually transcribed correctly. Falls back to the original text
+    on anything that doesn't look like two numbers — never raises."""
+    if not text:
+        return text
+    parts = re.split(r"[./-]", text.strip())
+    if len(parts) != 2:
+        return text
+    try:
+        day, month = int(parts[0]), int(parts[1])
+    except ValueError:
+        return text
+    return f"{day:02d}/{month:02d}"
+
+
 def _merge_table_fields(raw_row: object) -> dict:
     raw_row = raw_row if isinstance(raw_row, dict) else {}
-    return {name: _ef(raw_row.get(name), parser) for name, parser in _TABLE_FIELD_PARSERS.items()}
+    fields = {name: _ef(raw_row.get(name), parser) for name, parser in _TABLE_FIELD_PARSERS.items()}
+    for key in ("date_op", "date_fin"):
+        fields[key] = fields[key].model_copy(update={"raw_text": _normalize_date_raw(fields[key].raw_text)})
+    return fields
 
 
 def _as_indexed_dict(raw: object) -> dict:

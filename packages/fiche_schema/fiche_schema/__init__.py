@@ -20,10 +20,14 @@ from .factory import (
 from .operations import CONTROLE_ROWS, PARTIE_1_OPERATIONS, PARTIE_2_OPERATIONS
 from .validation import (
     ValidationIssue,
+    is_auto_validatable,
     low_confidence_or_flagged,
+    split_matricules,
+    systematic_misreads,
     validate_extraction,
     weighted_overall_confidence,
 )
+from .voting import vote_extractions
 
 __all__ = [
     "ControlRow",
@@ -45,6 +49,10 @@ __all__ = [
     "validate_extraction",
     "weighted_overall_confidence",
     "low_confidence_or_flagged",
+    "is_auto_validatable",
+    "split_matricules",
+    "systematic_misreads",
+    "vote_extractions",
     "CONTROLE_ROWS",
     "PARTIE_1_OPERATIONS",
     "PARTIE_2_OPERATIONS",

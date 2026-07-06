@@ -18,3 +18,24 @@ celery_app.conf.worker_prefetch_multiplier = 1
 # fast. The (scan_id, page_index) unique constraint makes any redelivery safe
 # even if it overlaps the original run.
 celery_app.conf.broker_transport_options = {"visibility_timeout": 30 * 60}
+
+# SharePoint auto-ingest: when enabled, a beat schedule fires the poller every
+# SHAREPOINT_POLL_SECONDS. Only registered when enabled so a default deploy runs
+# no extra timer. Requires a running `celery beat` (the compose `beat` service).
+def _on(flag: str) -> bool:
+    return os.environ.get(flag, "0") not in ("0", "false", "False", "")
+
+
+_schedule: dict = {}
+if _on("SHAREPOINT_ENABLED"):
+    _schedule["poll-sharepoint"] = {
+        "task": "worker.poll_sharepoint",
+        "schedule": float(os.environ.get("SHAREPOINT_POLL_SECONDS", "180")),
+    }
+if _on("LOCAL_INBOX_ENABLED"):
+    _schedule["poll-local-inbox"] = {
+        "task": "worker.poll_local_inbox",
+        "schedule": float(os.environ.get("LOCAL_INBOX_POLL_SECONDS", "30")),
+    }
+if _schedule:
+    celery_app.conf.beat_schedule = _schedule

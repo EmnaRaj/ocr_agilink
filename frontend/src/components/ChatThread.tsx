@@ -25,6 +25,8 @@ export default function ChatThread({ compact = false }: { compact?: boolean }) {
 
   async function ask(question: string) {
     if (!question.trim() || busy) return;
+    // Stateless: the conversation lives only in React state and is sent as history.
+    // It resets when the app is reloaded.
     const history = msgs.map((m) => ({ role: m.role, content: m.content }));
     setMsgs((m) => [...m, { role: "user", content: question }, { role: "assistant", content: "", streaming: true }]);
     setInput("");

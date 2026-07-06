@@ -16,6 +16,7 @@ from ..models import Fiche
 
 _BLUE = "0E5B75"  # Agilink brand petrol-blue
 _LOGO = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
+_FARNESS = Path(__file__).resolve().parent.parent / "assets" / "farness.png"  # "powered by" footer
 
 OP_HEADERS = ["#", "Opération", "Appl.", "Date", "Qté", "Début", "Fin", "Outillage", "Matricule"]
 CTRL_HEADERS = ["Contrôle", "Méthode", "Résultat", "Matricule"]
@@ -128,6 +129,8 @@ def to_xlsx(fiche: Fiche) -> bytes:
     section("OPÉRATIONS", OP_HEADERS, [_op_cells(o) for o in d["operations"]])
     section("CONTRÔLES", CTRL_HEADERS, [_ctrl_cells(c) for c in d["controls"]])
 
+    ws.cell(row + 1, 1, "Propulsé par Farness · Agilink Fiches Suiveuses").font = Font(italic=True, size=9, color="9CA3AF")
+
     for i, w in enumerate([5, 40, 7, 8, 6, 8, 8, 18, 11], 1):
         ws.column_dimensions[chr(64 + i)].width = w
 
@@ -208,6 +211,16 @@ def to_pdf(fiche: Fiche) -> bytes:
         pdf.set_text_color(180, 120, 0)
         pdf.multi_cell(0, 5, _lat(f"⚠ {len(d['validation'])} champ(s) à vérifier lors de la validation."))
 
+    # "Powered by Farness" footer — travels with any shared/printed fiche.
+    pdf.set_auto_page_break(auto=False)
+    if _FARNESS.exists():
+        lw = 15
+        pdf.image(str(_FARNESS), x=(pdf.w - lw) / 2, y=pdf.h - 15, w=lw)
+    pdf.set_y(-9)
+    pdf.set_font("Helvetica", "I", 6.5)
+    pdf.set_text_color(170, 170, 170)
+    pdf.cell(0, 4, _lat("Propulsé par Farness  ·  Agilink — Traçabilité Interne"), align="C")
+
     out = pdf.output()
     return bytes(out)
 
@@ -232,5 +245,7 @@ def to_csv(fiche: Fiche) -> bytes:
     w.writerow(CTRL_HEADERS)
     for c in d["controls"]:
         w.writerow(_ctrl_cells(c))
+    w.writerow([])
+    w.writerow(["Propulsé par Farness · Agilink Fiches Suiveuses"])
     # utf-8 BOM so Excel opens the accents correctly
     return buf.getvalue().encode("utf-8-sig")

@@ -36,27 +36,55 @@ class RegionalVLMClient(VLMClient):
 
     _model: str  # set by each subclass's __init__
 
-    def extract(self, image_bytes: bytes, *, mime_type: str = "image/png") -> FicheExtraction:
+    def extract(
+        self, image_bytes: bytes, *, mime_type: str = "image/png", temperature: float = 0.0
+    ) -> FicheExtraction:
         # Deterministic enhancement (contrast/sharpen) before any model call —
         # makes the handwriting crisper for the VLM. See preprocess.enhance.
         image_bytes = enhance(image_bytes)
         combined: dict = {}
         failures: list[str] = []
 
-        # Whole-section crops (header, the two operation Parties, controls). A
-        # strong VLM (Qwen3-VL) reads a full section correctly — it maps each
-        # filled row to its printed label (no shift) AND, seeing the whole
-        # column, leaves blank heure_fin/outillage cells blank instead of
-        # fabricating them. The four calls are independent, so run them in
-        # parallel.
-        def do_region(region: Region) -> tuple[Region, dict | None, Exception | None]:
+        def do_region(region: Region, extra_prompt: str | None = None) -> tuple[Region, dict | None, Exception | None]:
             try:
-                return region, self._extract_region(image_bytes, region), None
+                return region, self._extract_region(image_bytes, region, extra_prompt, temperature), None
             except VLMExtractionError as exc:
                 return region, None, exc
 
-        with ThreadPoolExecutor(max_workers=len(REGIONS)) as pool:
-            results = list(pool.map(do_region, REGIONS))
+        # The header runs first (not in the parallel batch below) so its "qte"
+        # can be handed to the operations crops as a concrete expected value —
+        # "qte_realisee" is read far more reliably when told what to expect
+        # than when the model has to infer it row-by-row. One extra round trip
+        # of latency, but still 4 total calls (no added API cost).
+        header_region = next(r for r in REGIONS if r.name == "header")
+        h_region, h_raw, h_exc = do_region(header_region)
+        header_qte = None
+        if h_exc is not None:
+            logger.warning("region %s extraction failed: %s", h_region.name, h_exc)
+            failures.append(h_region.name)
+        else:
+            _absorb(combined, h_region, h_raw)
+            header_qte = ((h_raw or {}).get("header") or {}).get("qte", {}).get("value")
+
+        qty_hint = None
+        if isinstance(header_qte, int):
+            qty_hint = (
+                f'\nCONTEXT (verify, do not assume): the header reading for this sheet\'s '
+                f'batch quantity ("Qté") was {header_qte}. Read each row\'s "qte_realisee" '
+                f"independently from what's actually written in that cell — do NOT just "
+                f"copy {header_qte} into every row. Only use this as a tie-breaker: if a "
+                f"specific cell's digit is genuinely ambiguous between two readings, prefer "
+                f"whichever is closer to {header_qte}. If a row's cell clearly and legibly "
+                f"shows a different number, report what is actually written, not {header_qte}."
+            )
+
+        # The two operation Parties + controls are independent of each other,
+        # so they still run in parallel.
+        rest = [r for r in REGIONS if r.name != "header"]
+        with ThreadPoolExecutor(max_workers=len(rest)) as pool:
+            results = list(pool.map(
+                lambda r: do_region(r, qty_hint if "operations" in r.contributes else None), rest
+            ))
 
         for region, raw, exc in results:
             if exc is not None:
@@ -73,10 +101,13 @@ class RegionalVLMClient(VLMClient):
         except (KeyError, ValueError, TypeError) as exc:
             raise VLMExtractionError(f"Assembled response didn't match the expected shape: {exc}") from exc
 
-    def _extract_region(self, image_bytes: bytes, region: Region) -> dict:
+    def _extract_region(
+        self, image_bytes: bytes, region: Region, extra_prompt: str | None = None, temperature: float = 0.0
+    ) -> dict:
         band = crop_band(image_bytes, region)
         data_uri = "data:image/jpeg;base64," + base64.b64encode(band).decode()
-        return self._complete_with_retry(data_uri, region.prompt)
+        prompt = region.prompt + extra_prompt if extra_prompt else region.prompt
+        return self._complete_with_retry(data_uri, prompt, temperature)
 
     def _complete_with_retry(self, data_uri: str, prompt: str, temperature: float = 0.0) -> dict:
         last_error: VLMExtractionError | None = None

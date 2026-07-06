@@ -13,7 +13,7 @@ package root, or under pytest if/when it's added to the dev deps.
 
 from datetime import time
 
-from fiche_schema.factory import _ef, _parse_time, merge_extraction
+from fiche_schema.factory import _ef, _normalize_date_raw, _parse_time, merge_extraction
 
 
 def test_parse_time_accepts_single_digit_and_h_forms():
@@ -38,6 +38,23 @@ def test_bad_int_cell_degrades():
     assert field.value is None
     assert field.raw_text == "20 pcs"
     assert field.confidence == 0.0
+
+
+def test_date_normalized_to_ddmm_slash():
+    # Same date, several forms the model might emit — canonicalized to a single
+    # zero-padded "DD/MM" so a table mixing separators/padding doesn't read as an
+    # error even when each cell was transcribed correctly.
+    assert _normalize_date_raw("30/3") == "30/03"
+    assert _normalize_date_raw("30.3") == "30/03"
+    assert _normalize_date_raw("30-3") == "30/03"
+    assert _normalize_date_raw("30.03") == "30/03"
+    assert _normalize_date_raw("7/11") == "07/11"  # zero-pads the day too
+
+
+def test_date_separator_normalization_degrades_gracefully():
+    assert _normalize_date_raw(None) is None
+    assert _normalize_date_raw("") == ""
+    assert _normalize_date_raw("not a date") == "not a date"
 
 
 def test_non_numeric_confidence_degrades_to_zero():

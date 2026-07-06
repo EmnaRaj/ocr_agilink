@@ -35,10 +35,10 @@ body {
 @layer components {
   /* ── Surfaces ─────────────────────────────────────────────── */
   .card {
-    @apply rounded-2xl border border-slate-200/70 bg-white shadow-card;
+    @apply rounded-2xl bg-white shadow-card ring-1 ring-slate-200/60;
   }
   .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft;
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft hover:ring-slate-200;
   }
   .kpi-gradient {
     background-image: linear-gradient(135deg, #ffffff 0%, #f7fbfc 100%);
@@ -46,31 +46,65 @@ body {
 
   /* ── Section headers ──────────────────────────────────────── */
   .eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-agilink-500/80;
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-agilink-500/80;
   }
   .panel-title {
-    @apply text-sm font-semibold text-slate-700;
+    @apply text-[15px] font-semibold tracking-tight text-slate-800;
   }
   .panel-sub {
     @apply text-xs text-slate-400;
   }
+  .section-eyebrow {
+    @apply flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400;
+  }
 
-  /* ── Buttons ──────────────────────────────────────────────── */
+  /* ── Buttons (one soft, consistent family) ────────────────── */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition-all hover:opacity-95 hover:shadow-glow active:scale-[.98] disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition-all hover:-translate-y-px hover:shadow-lift hover:brightness-[1.04] active:translate-y-0 active:scale-[.985] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-agilink-500/25 disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-agilink-50 px-4 py-2.5 text-sm font-semibold text-agilink-700 ring-1 ring-inset ring-agilink-100 transition-all hover:bg-agilink-100 active:scale-[.985] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-agilink-500/20 disabled:pointer-events-none disabled:opacity-40;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[.98];
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-[.985] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-300/30 disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-inset ring-rose-100 transition-all hover:bg-rose-100 active:scale-[.985] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-400/20 disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-[13px];
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-95 disabled:opacity-40;
   }
 
   /* ── Inputs ───────────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-700 transition-all placeholder:text-slate-400 focus:border-agilink-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-agilink-500/15;
+    @apply w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-sm text-slate-700 transition-all placeholder:text-slate-400 focus:border-agilink-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-agilink-500/10;
   }
 
-  /* ── Chips ────────────────────────────────────────────────── */
+  /* ── Pills / chips / status badges ────────────────────────── */
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset;
+  }
+  .badge-emerald { @apply bg-emerald-50 text-emerald-700 ring-emerald-200/60; }
+  .badge-amber   { @apply bg-amber-50 text-amber-700 ring-amber-200/70; }
+  .badge-sky     { @apply bg-sky-50 text-sky-700 ring-sky-200/70; }
+  .badge-rose    { @apply bg-rose-50 text-rose-700 ring-rose-200/60; }
+  .badge-slate   { @apply bg-slate-50 text-slate-600 ring-slate-200/70; }
+
+  /* ── Segmented control (view toggles) ─────────────────────── */
+  .segmented {
+    @apply inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-card;
+  }
+  .seg-item {
+    @apply flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-500 transition-all hover:text-slate-700;
+  }
+  .seg-item-active {
+    @apply bg-brand text-white shadow-soft hover:text-white;
   }
 
   /* streaming caret */

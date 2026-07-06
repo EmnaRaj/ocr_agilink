@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,14 +28,15 @@ class Fiche(Base):
     date_creation: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(128))
     raw_extraction: Mapped[dict | None] = mapped_column(JSONB)
+    # Soft-archive: hidden from the default history list but not deleted.
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     work_order: Mapped["WorkOrder"] = relationship(back_populates="fiches")
     scan: Mapped["Scan"] = relationship(back_populates="fiches")
     items: Mapped[list["Item"]] = relationship(back_populates="fiche", cascade="all, delete-orphan")
-    operations: Mapped[list["Operation"]] = relationship(
-        back_populates="fiche", cascade="all, delete-orphan"
-    )
-    controls: Mapped[list["Control"]] = relationship(
+    # Unified operation + control rows (see models/operation_row.py). This is the
+    # source of truth for analytics / reporting / the cross-fiche browse view.
+    rows: Mapped[list["OperationRow"]] = relationship(
         back_populates="fiche", cascade="all, delete-orphan"
     )
     audit_events: Mapped[list["AuditLog"]] = relationship(

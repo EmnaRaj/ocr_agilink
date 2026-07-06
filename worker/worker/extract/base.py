@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from fiche_schema import FicheExtraction
+from fiche_schema import FicheExtraction, vote_extractions
 
 
 class VLMClient(ABC):
@@ -12,4 +12,27 @@ class VLMClient(ABC):
     """
 
     @abstractmethod
-    def extract(self, image_bytes: bytes, *, mime_type: str = "image/png") -> FicheExtraction: ...
+    def extract(
+        self, image_bytes: bytes, *, mime_type: str = "image/png", temperature: float = 0.0
+    ) -> FicheExtraction: ...
+
+    def extract_voted(
+        self,
+        image_bytes: bytes,
+        *,
+        mime_type: str = "image/png",
+        passes: int = 3,
+        temperature: float = 0.4,
+    ) -> FicheExtraction:
+        """Run `extract` `passes` times and majority-vote per cell
+        (self-consistency). Cancels random per-run VLM misreads and turns
+        inter-run agreement into a calibrated confidence (see fiche_schema.voting).
+        Passes run at a non-zero temperature so they actually vary; passes<=1
+        falls back to a single deterministic pass."""
+        if passes <= 1:
+            return self.extract(image_bytes, mime_type=mime_type)
+        runs = [
+            self.extract(image_bytes, mime_type=mime_type, temperature=temperature)
+            for _ in range(passes)
+        ]
+        return vote_extractions(runs)

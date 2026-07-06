@@ -46,7 +46,7 @@ def test_detects_qty_overflow_column_swap():
         "operations": {"0": {"qte_realisee": {"value": 330, "confidence": 1.0}}},
     }
     codes = {i.code for i in validate_extraction(_fiche(raw))}
-    assert "qte_superieure" in codes
+    assert "qte_differente" in codes
 
 
 def test_detects_time_incoherence():
@@ -70,6 +70,75 @@ def test_unknown_matricule_flagged_against_referential():
     }
     issues = validate_extraction(_fiche(raw), known_matricules={"330", "164"})
     assert any(i.code == "matricule_inconnu" for i in issues)
+
+
+def test_unknown_matricule_suggests_confusable_known_value():
+    # "448" isn't registered, but "442" is, and 2/8 is a known confusion pair
+    # (one-digit difference) — catches the case a majority-vote check can't:
+    # the SAME wrong digit misread on every row of a fiche, with no internal
+    # outlier to flag.
+    raw = {
+        "header": {"ref_produit": {"value": "10106751", "confidence": 1.0},
+                   "n_of": {"value": "1554", "confidence": 1.0}},
+        "operations": {"0": {"matricule_operateur": {"value": "448", "confidence": 1.0}}},
+    }
+    issues = validate_extraction(_fiche(raw), known_matricules={"442"})
+    suggestions = [i for i in issues if i.code == "matricule_proche_connu"]
+    assert len(suggestions) == 1
+    assert "442" in suggestions[0].message
+
+
+def test_no_suggestion_when_multiple_known_values_equally_plausible():
+    # "448" is a one-confusable-digit match for both "442" (8↔2) and "443"
+    # (8↔3) — an ambiguous suggestion is worse than none, so fall back to
+    # the generic flag.
+    raw = {
+        "header": {"ref_produit": {"value": "10106751", "confidence": 1.0},
+                   "n_of": {"value": "1554", "confidence": 1.0}},
+        "operations": {"0": {"matricule_operateur": {"value": "448", "confidence": 1.0}}},
+    }
+    issues = validate_extraction(_fiche(raw), known_matricules={"442", "443"})
+    assert not any(i.code == "matricule_proche_connu" for i in issues)
+    assert any(i.code == "matricule_inconnu" for i in issues)
+
+
+def test_matricule_outlier_flagged_against_fiche_majority():
+    # Rows 0-1 share matricule 442 (the fiche's one operator); row 2's "448" is
+    # a plausible format/registry match on its own but breaks from the rest of
+    # the sheet — exactly the misread pattern a single-row check can't catch.
+    raw = {
+        "header": {"ref_produit": {"value": "10106751", "confidence": 1.0},
+                   "n_of": {"value": "1554", "confidence": 1.0}},
+        "operations": {
+            "0": {"matricule_operateur": {"value": "442", "confidence": 1.0}},
+            "1": {"matricule_operateur": {"value": "442", "confidence": 1.0}},
+            "2": {"matricule_operateur": {"value": "448", "confidence": 1.0}},
+        },
+    }
+    issues = validate_extraction(_fiche(raw))
+    atypiques = [i for i in issues if i.code == "matricule_atypique"]
+    assert len(atypiques) == 1
+    assert "448" in atypiques[0].message
+
+
+def test_matricule_vote_does_not_cross_parties():
+    # Partie 1 (indices 0-1) is consistently "448"; Partie 2 (index 12+) is
+    # consistently "442". Two real, different operators per Partie is a
+    # legitimate pattern — the vote must stay within each Partie, not let
+    # whichever one has more filled rows brand the other Partie as wrong.
+    raw = {
+        "header": {"ref_produit": {"value": "10106751", "confidence": 1.0},
+                   "n_of": {"value": "1554", "confidence": 1.0}},
+        "operations": {
+            "0": {"matricule_operateur": {"value": "448", "confidence": 1.0}},
+            "1": {"matricule_operateur": {"value": "448", "confidence": 1.0}},
+            "2": {"matricule_operateur": {"value": "448", "confidence": 1.0}},
+            "12": {"matricule_operateur": {"value": "442", "confidence": 1.0}},
+            "13": {"matricule_operateur": {"value": "442", "confidence": 1.0}},
+        },
+    }
+    issues = validate_extraction(_fiche(raw))
+    assert [i for i in issues if i.code == "matricule_atypique"] == []
 
 
 def test_clean_fiche_has_no_issues():

@@ -23,16 +23,18 @@ export default {
         sans: ["Inter", "system-ui", "Segoe UI", "Roboto", "sans-serif"],
       },
       boxShadow: {
-        card: "0 1px 3px rgba(16,24,40,.07), 0 1px 2px rgba(16,24,40,.04)",
-        soft: "0 6px 24px -10px rgba(14,91,117,.18), 0 2px 8px -4px rgba(16,24,40,.06)",
-        glow: "0 0 0 1px rgba(14,91,117,.06), 0 12px 40px -16px rgba(14,91,117,.30)",
-        innerlg: "inset 0 1px 0 rgba(255,255,255,.06)",
+        // Softer, more diffuse — the "expensive" look comes from light, layered shadows.
+        card: "0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.05)",
+        soft: "0 8px 28px -14px rgba(14,91,117,.16), 0 3px 10px -6px rgba(16,24,40,.05)",
+        lift: "0 18px 44px -20px rgba(14,91,117,.22), 0 8px 18px -12px rgba(16,24,40,.08)",
+        glow: "0 0 0 1px rgba(14,91,117,.05), 0 14px 44px -18px rgba(14,91,117,.26)",
+        innerlg: "inset 0 1px 0 rgba(255,255,255,.07)",
       },
       backgroundImage: {
-        sidebar: "linear-gradient(170deg, #0e5b75 0%, #0c4255 55%, #0a3140 100%)",
-        brand: "linear-gradient(135deg, #0e5b75 0%, #1f86a4 100%)",
-        "brand-soft": "linear-gradient(135deg, #eef7fa 0%, #d3ebf1 100%)",
-        mesh: "radial-gradient(900px 400px at 100% -5%, rgba(33,122,150,.08), transparent), radial-gradient(700px 500px at -10% 110%, rgba(14,91,117,.06), transparent)",
+        sidebar: "linear-gradient(168deg, #0f6178 0%, #0c4658 56%, #0a3340 100%)",
+        brand: "linear-gradient(135deg, #11627d 0%, #2391b0 100%)",
+        "brand-soft": "linear-gradient(135deg, #eef7fa 0%, #dbeef3 100%)",
+        mesh: "radial-gradient(900px 420px at 100% -8%, rgba(255,255,255,.10), transparent), radial-gradient(680px 520px at -10% 112%, rgba(255,255,255,.06), transparent)",
       },
       keyframes: {
         "fade-in": { "0%": { opacity: 0, transform: "translateY(6px)" }, "100%": { opacity: 1, transform: "none" } },

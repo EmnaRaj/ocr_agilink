@@ -40,10 +40,16 @@ def _op_names(indices: tuple[int, ...]) -> dict[str, int]:
     return {_OPERATIONS[i]: i for i in indices}
 
 
+# Header/operations_p1 used to overlap by only 1% (0.16-0.17) — too thin: on
+# a real scan the "Qté:" label landed just past 0.17, outside the header crop
+# entirely, so the header-extraction call had no pixels to read it from
+# (qte came back unread). Widened header's bottom edge and operations_p2's
+# bottom edge so a few percent of per-page layout variance can't push a
+# field/row outside every crop that's supposed to cover it.
 REGIONS: tuple[Region, ...] = (
-    Region("header", 0.04, 0.17, build_header_prompt(), ("header",)),
+    Region("header", 0.04, 0.20, build_header_prompt(), ("header",)),
     Region("operations_p1", 0.16, 0.50, build_operations_prompt(P1_INDICES), ("operations",), _op_names(P1_INDICES)),
-    Region("operations_p2", 0.47, 0.83, build_operations_prompt(P2_INDICES), ("operations",), _op_names(P2_INDICES)),
+    Region("operations_p2", 0.47, 0.88, build_operations_prompt(P2_INDICES), ("operations",), _op_names(P2_INDICES)),
     Region("controls", 0.80, 1.0, build_controls_prompt(), ("controls", "items")),
 )
 

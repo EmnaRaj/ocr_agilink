@@ -37,7 +37,7 @@ def get_stats(db: Session = Depends(get_db)) -> StatsResponse:
         .options(
             joinedload(Fiche.work_order).joinedload(WorkOrder.product),
             selectinload(Fiche.items),
-            selectinload(Fiche.operations),
+            selectinload(Fiche.rows),
         )
         .order_by(Fiche.date_creation.desc())
         .limit(8)

@@ -95,6 +95,26 @@ services:
       dockerfile: worker/Dockerfile
     restart: unless-stopped
     env_file: .env
+    # Local drop-folder auto-ingest: host ./inbox is where you drop scans; the
+    # worker reads + moves them (to ./inbox/processed). Set LOCAL_INBOX_ENABLED=1.
+    volumes:
+      - ./inbox:/srv/inbox
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Celery beat scheduler — drives the auto-ingest pollers on a timer
+  # (SharePoint and/or the local inbox). Same image as the worker, just the beat
+  # process. Single instance only. No-op when both pollers are disabled.
+  beat:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    command: ["celery", "-A", "worker.celery_app", "beat", "--loglevel=info"]
+    volumes:
+      - ./inbox:/srv/inbox
     depends_on:
       redis:
         condition: service_healthy

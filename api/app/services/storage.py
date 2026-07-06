@@ -28,3 +28,9 @@ def download_scan(storage_url: str) -> tuple[bytes, str]:
     bucket, _, key = storage_url.removeprefix("s3://").partition("/")
     obj = _client().get_object(Bucket=bucket, Key=key)
     return obj["Body"].read(), obj.get("ContentType", "application/octet-stream")
+
+
+def delete_scan(storage_url: str) -> None:
+    """Remove a stored scan object (used when a scan is canceled/deleted)."""
+    bucket, _, key = storage_url.removeprefix("s3://").partition("/")
+    _client().delete_object(Bucket=bucket, Key=key)

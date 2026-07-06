@@ -40,3 +40,17 @@ db/*.db
 # The blank template docs/fixtures/*VIERGE*.pdf is kept as a layout reference.
 /TapScanner*.pdf
 docs/fixtures/sample_filled_sheet.pdf
+
+# --- never commit: real scans, big media, stray files ---
+/Test_file_6948.pdf
+/Logo-png.png
+*.mp4
+# local drop-folder: keep README + structure, never the dropped scans
+inbox/*.pdf
+inbox/*.jpg
+inbox/*.jpeg
+inbox/*.png
+inbox/processed/*.pdf
+inbox/processed/*.jpg
+inbox/processed/*.jpeg
+inbox/processed/*.png

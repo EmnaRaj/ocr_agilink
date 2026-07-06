@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import analytics, chat, fiches, fiches_read, stats
+from .routers import analytics, chat, fiches, fiches_read, operations, stats
 
 app = FastAPI(title="Agilink Fiches Suiveuses API")
 
@@ -23,6 +23,7 @@ app.include_router(fiches_read.router)
 app.include_router(stats.router)
 app.include_router(chat.router)
 app.include_router(analytics.router)
+app.include_router(operations.router)
 
 
 @app.get("/health")

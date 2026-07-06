@@ -18,6 +18,8 @@ dependencies = [
     "boto3>=1.34",
     "pymupdf>=1.24,<2",
     "pytesseract>=0.3.10",  # OSD orientation detection (needs tesseract-ocr binary)
+    "msal>=1.28,<2",        # Azure AD app-only auth for the SharePoint poller
+    "requests>=2.31",       # Microsoft Graph calls (delta + file download)
 ]
 # fiche-schema is installed separately as a local editable package
 # (see ../packages/fiche_schema); Phase 2 adds opencv-python, etc.

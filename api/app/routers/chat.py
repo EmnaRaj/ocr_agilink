@@ -1,10 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from ..db import get_db
-from ..services.chat import stream_answer
+from ..agent.service import run_stream
 
 router = APIRouter(tags=["chat"])
 
@@ -20,15 +18,18 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-def chat(req: ChatRequest, db: Session = Depends(get_db)) -> StreamingResponse:
-    """Stream the assistant's answer (plain-text chunks) grounded in all the data."""
+async def chat(req: ChatRequest) -> StreamingResponse:
+    """Stream the copilot's answer (plain-text chunks), grounded via tools.
 
-    def gen():
-        try:
-            for piece in stream_answer(req.question, [t.model_dump() for t in req.history], db):
-                yield piece
-        except Exception as exc:  # surface a readable error in the stream
-            yield f"\n\n[erreur] {exc}"
+    Stateless: context comes from the client-sent `history`; nothing is persisted,
+    so the chat resets on relaunch. Tools open their own per-call sessions, so the
+    route needs no DB session of its own.
+    """
+    history = [t.model_dump() for t in req.history]
+
+    async def gen():
+        async for piece in run_stream(req.question, history):
+            yield piece
 
     return StreamingResponse(
         gen(),
