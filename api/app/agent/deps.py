@@ -16,3 +16,6 @@ from sqlalchemy.orm import Session
 @dataclass
 class Deps:
     session_factory: Callable[[], Session]
+    # ISO code of the language to answer in (detected from the question); drives the
+    # dynamic language instruction. None → fall back to the system-prompt rule.
+    answer_language: str | None = None

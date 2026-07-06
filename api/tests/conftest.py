@@ -36,6 +36,13 @@ def engine():
 
     eng = create_engine(_server_url(_TEST_DB))
     Base.metadata.create_all(eng)
+    # The analytical views (specs/003) are created by an Alembic migration, not by
+    # the models; create them here from the same canonical DDL so tests match prod.
+    from app.agent.views import ANALYTICS_VIEWS
+
+    with eng.begin() as c:
+        for ddl in ANALYTICS_VIEWS:
+            c.execute(text(ddl))
     yield eng
     eng.dispose()
 

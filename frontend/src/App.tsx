@@ -7,6 +7,7 @@ import History from "./pages/History";
 import Operations from "./pages/Operations";
 import FicheDetail from "./pages/FicheDetail";
 import Assistant from "./pages/Assistant";
+import { ChatProvider } from "./ChatContext";
 
 // A data router (vs plain <BrowserRouter>) is required for useBlocker, which
 // FicheDetail uses to ask "save or discard?" before navigating away from an
@@ -26,5 +27,14 @@ const router = createBrowserRouter(
 );
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  // ChatProvider above the data-router so the conversation is shared between the
+  // floating bubble and the /assistant page and survives navigation (stateless:
+  // clears only on a full reload). The router (createBrowserRouter) is kept — it
+  // carries all routes incl. /suivi & /operations and powers FicheDetail's
+  // useBlocker save-guard.
+  return (
+    <ChatProvider>
+      <RouterProvider router={router} />
+    </ChatProvider>
+  );
 }

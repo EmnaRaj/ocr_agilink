@@ -17,6 +17,7 @@ dependencies = [
     "openpyxl>=3.1,<4",   # Excel export
     "fpdf2>=2.7,<3",      # PDF export
     "pydantic-ai-slim[openai]>=2.0,<3",  # chatbot copilot — tool-calling agent (app/agent/)
+    "langdetect>=1.0,<2",  # deterministic answer-language detection (agent/lang.py)
 ]
 # fiche-schema is installed separately as a local editable package
 # (see ../packages/fiche_schema) — not declared here since it isn't published

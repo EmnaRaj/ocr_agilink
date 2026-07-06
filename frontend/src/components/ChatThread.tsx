@@ -1,12 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, Bot, User } from "lucide-react";
-import { api } from "../api";
-
-interface Msg {
-  role: "user" | "assistant";
-  content: string;
-  streaming?: boolean;
-}
+import { Send, Sparkles, Bot, User, Database } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { useChat, type Msg, type Step } from "../ChatContext";
 
 const SUGGESTIONS = [
   "Combien de fiches au total ?",
@@ -15,40 +11,121 @@ const SUGGESTIONS = [
   "Y a-t-il des contrôles non conformes ?",
 ];
 
+function ReasoningPanel({ text, active }: { text: string; active: boolean }) {
+  // Auto-expands while the model is actively reasoning (streaming, no answer yet),
+  // then auto-collapses once the answer begins. Still manually toggleable afterwards.
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(active), [active]);
+  if (!text.trim()) return null;
+  return (
+    <details
+      open={open}
+      onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
+      className="mb-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[12px] text-slate-500 ring-1 ring-slate-200/70"
+    >
+      <summary className="flex cursor-pointer select-none items-center gap-1.5 font-medium text-slate-500">
+        Raisonnement
+        {active && (
+          <span className="inline-flex gap-0.5">
+            {[0, 1, 2].map((d) => (
+              <span key={d} className="h-1 w-1 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: `${d * 0.15}s` }} />
+            ))}
+          </span>
+        )}
+      </summary>
+      <div className="md mt-1 leading-snug text-slate-500">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div>
+    </details>
+  );
+}
+
+// Human-readable description of what each tool actually pulled (the "source").
+const SOURCE_LABEL: Record<string, string> = {
+  get_overview: "Statistiques globales — KPIs, charge par opérateur, conformité",
+  get_referential: "Référentiel — opérateurs et outils connus",
+  list_review_queue: "File de revue — fiches à contrôler",
+  search_fiches: "Recherche de fiches",
+  get_fiche: "Détail d'une fiche",
+  describe_schema: "Schéma des vues analytiques",
+  run_sql: "Requête SQL sur les vues analytiques",
+};
+
+function argsSummary(args?: Record<string, unknown> | string): string {
+  if (!args) return "";
+  if (typeof args === "string") return args;
+  const parts = Object.entries(args).map(([k, v]) => `${k}=${v}`);
+  return parts.join(", ");
+}
+
+function SourcesPanel({ steps }: { steps: Step[] }) {
+  if (!steps.length) return null;
+  return (
+    <details className="mb-1.5 rounded-lg bg-agilink-50/60 px-2.5 py-1.5 text-[12px] text-agilink-800 ring-1 ring-agilink-200/60">
+      <summary className="flex cursor-pointer select-none items-center gap-1.5 font-medium text-agilink-700">
+        <Database size={12} /> Sources · {steps.length}
+      </summary>
+      <ul className="mt-1.5 space-y-2">
+        {steps.map((s, i) => {
+          const argStr = argsSummary(s.args);
+          return (
+            <li key={i} className="leading-snug">
+              <div className="font-medium text-agilink-800">
+                {SOURCE_LABEL[s.tool] || s.tool}
+                {typeof s.rows === "number" && <span className="text-slate-400"> · {s.rows} ligne(s)</span>}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                <span className="font-mono">{s.tool}</span>
+                {argStr && <span> · {argStr}</span>}
+              </div>
+              {s.error && <div className="text-[11px] text-rose-500">{s.error}</div>}
+              {s.sql && (
+                <pre className="mt-0.5 overflow-x-auto rounded bg-white/70 p-1.5 text-[11px] text-slate-600 ring-1 ring-slate-200/70">
+                  {s.sql}
+                </pre>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
+function AssistantBubble({ m }: { m: Msg }) {
+  if (m.streaming && !m.content && !m.reasoning && !(m.steps && m.steps.length)) {
+    return (
+      <span className="inline-flex gap-1 py-1">
+        {[0, 1, 2].map((d) => (
+          <span key={d} className="h-2 w-2 animate-bounce rounded-full bg-agilink-300" style={{ animationDelay: `${d * 0.15}s` }} />
+        ))}
+      </span>
+    );
+  }
+  return (
+    <div>
+      <ReasoningPanel text={m.reasoning || ""} active={!!m.streaming && !m.content} />
+      {m.content && (
+        <div className="md">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+        </div>
+      )}
+      <SourcesPanel steps={m.steps || []} />
+    </div>
+  );
+}
+
 export default function ChatThread({ compact = false }: { compact?: boolean }) {
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const { msgs, busy, ask } = useChat();
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [msgs]);
 
-  async function ask(question: string) {
+  function submit(question: string) {
     if (!question.trim() || busy) return;
-    // Stateless: the conversation lives only in React state and is sent as history.
-    // It resets when the app is reloaded.
-    const history = msgs.map((m) => ({ role: m.role, content: m.content }));
-    setMsgs((m) => [...m, { role: "user", content: question }, { role: "assistant", content: "", streaming: true }]);
     setInput("");
-    setBusy(true);
-    try {
-      await api.chatStream(question, history, (chunk) => {
-        setMsgs((m) => {
-          const copy = [...m];
-          copy[copy.length - 1] = { ...copy[copy.length - 1], content: copy[copy.length - 1].content + chunk };
-          return copy;
-        });
-      });
-    } catch (e) {
-      setMsgs((m) => {
-        const copy = [...m];
-        copy[copy.length - 1] = { role: "assistant", content: `Erreur : ${e instanceof Error ? e.message : e}` };
-        return copy;
-      });
-    } finally {
-      setMsgs((m) => m.map((x, i) => (i === m.length - 1 ? { ...x, streaming: false } : x)));
-      setBusy(false);
-    }
+    ask(question);
   }
 
   return (
@@ -71,7 +148,7 @@ export default function ChatThread({ compact = false }: { compact?: boolean }) {
               {(compact ? SUGGESTIONS.slice(0, 3) : SUGGESTIONS).map((s) => (
                 <button
                   key={s}
-                  onClick={() => ask(s)}
+                  onClick={() => submit(s)}
                   className="card group flex items-center gap-2 px-3.5 py-2.5 text-left text-[13px] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-agilink-300 hover:text-agilink-700 hover:shadow-soft"
                 >
                   <Sparkles size={14} className="shrink-0 text-agilink-400 group-hover:text-agilink-600" />
@@ -93,19 +170,13 @@ export default function ChatThread({ compact = false }: { compact?: boolean }) {
             </div>
             <div className={`max-w-[84%] ${m.role === "user" ? "text-right" : ""}`}>
               <div
-                className={`inline-block whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-[13.5px] leading-relaxed ${
-                  m.role === "user" ? "bg-brand text-white shadow-soft" : "card text-slate-700"
+                className={`rounded-2xl px-3.5 py-2 text-[13.5px] leading-relaxed ${
+                  m.role === "user"
+                    ? "inline-block whitespace-pre-wrap bg-brand text-white shadow-soft"
+                    : "block card text-slate-700"
                 }`}
               >
-                {m.role === "assistant" && m.streaming && !m.content ? (
-                  <span className="inline-flex gap-1 py-1">
-                    {[0, 1, 2].map((d) => (
-                      <span key={d} className="h-2 w-2 animate-bounce rounded-full bg-agilink-300" style={{ animationDelay: `${d * 0.15}s` }} />
-                    ))}
-                  </span>
-                ) : (
-                  <span className={m.streaming ? "caret" : ""}>{m.content}</span>
-                )}
+                {m.role === "user" ? <span>{m.content}</span> : <AssistantBubble m={m} />}
               </div>
             </div>
           </div>
@@ -116,7 +187,7 @@ export default function ChatThread({ compact = false }: { compact?: boolean }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          ask(input);
+          submit(input);
         }}
         className="mt-1 flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white p-1.5 shadow-soft"
       >

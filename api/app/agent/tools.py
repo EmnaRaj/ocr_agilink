@@ -9,9 +9,36 @@ marker, each behind confirmation + an audit_log row.
 
 from pydantic_ai import RunContext
 
-from . import queries
+from . import queries, sql
 from .agent import agent
 from .deps import Deps
+
+# The columns the model may query via run_sql. All values reflect user corrections
+# (the views derive from raw_extraction). Returned by describe_schema and summarized
+# in the system prompt. Join key: fiche_id; operator link: matricule_operateur.
+SCHEMA: dict = {
+    "views": {
+        "v_fiches": ["fiche_id", "ref_produit", "designation", "n_of", "quantite",
+                     "statut", "date_creation", "overall_confidence", "validated", "page_index"],
+        "v_operations": ["fiche_id", "partie", "nom_operation", "ordre", "applicable",
+                         "date_op", "date_fin", "heure_debut", "heure_fin", "qte_realisee",
+                         "outillage", "matricule_operateur", "operateur_nom", "confidence"],
+        "v_controls": ["fiche_id", "type_controle", "methode", "resultat",
+                       "matricule_operateur", "operateur_nom", "confidence"],
+        "v_items": ["fiche_id", "numero_serie"],
+        "v_validation": ["fiche_id", "scope", "location", "field", "level", "code", "message"],
+    },
+    "referential": {
+        "products": ["product_id", "ref_produit", "designation"],
+        "work_orders": ["of_id", "n_of", "quantite", "product_id"],
+        "operators": ["operator_id", "matricule", "nom"],
+        "tools": ["tool_id", "code_outillage", "libelle"],
+    },
+    "notes": (
+        "statut in (extrait, en_revue, valide). v_controls.resultat=true means Conforme. "
+        "Dates are DD.MM text (no year). All values reflect user corrections."
+    ),
+}
 
 # Keys of compute_overview() the agent actually needs — keep the tool payload
 # bounded (the full dict's timeline/by_day/product_volumes grow with the data).
@@ -83,7 +110,33 @@ def get_referential(ctx: RunContext[Deps]) -> dict:
         return queries.referential(db)
 
 
-# --- Deferred: write-tools (Phase 2 / specs/003) ---------------------------
+@agent.tool
+def describe_schema(ctx: RunContext[Deps]) -> dict:
+    """List the queryable views and their columns for use with run_sql. Call this
+    before writing SQL when unsure which columns exist. All values reflect user
+    corrections (the views derive from the live extraction record)."""
+    return SCHEMA
+
+
+@agent.tool
+def run_sql(ctx: RunContext[Deps], query: str) -> dict:
+    """Run a read-only SQL SELECT over the analytical views to answer open-ended
+    analytical questions the other tools don't cover (cross-cutting filters, joins,
+    group-by, trends, rankings). Prefer the curated tools for common asks; use this
+    for anything custom.
+
+    Queryable views: v_fiches, v_operations, v_controls, v_items, v_validation, plus
+    referential tables products, work_orders, operators, tools. Join on fiche_id;
+    resolve operators by matricule_operateur. Call describe_schema first if unsure of
+    columns. Rules: a single SELECT/WITH statement only (no writes, no semicolons, no
+    comments); a LIMIT is enforced automatically. Returns {columns, rows, sql,
+    truncated}, or {error, sql} if the query is rejected or fails — read the error and
+    retry a corrected query. Base every figure you report on the returned rows."""
+    with ctx.deps.session_factory() as db:
+        return sql.run_readonly(query, fallback_session=db)
+
+
+# --- Deferred: operational write-tools (specs/004) -------------------------
 # validate_fiche / correct_field / flag_fiche / export_fiche go here, each
 # behind explicit confirmation and writing an audit_log row. Not implemented in
-# this milestone (read-only copilot).
+# this milestone (read-only analytical copilot).

@@ -112,4 +112,67 @@ body {
     content: "▌";
     @apply ml-0.5 text-agilink-400 animate-blink;
   }
+
+  /* ── Rendered Markdown (assistant messages) ───────────────── */
+  /* Tailwind's preflight strips list/heading styles, so re-add them scoped to .md */
+  .md > :first-child {
+    @apply mt-0;
+  }
+  .md > :last-child {
+    @apply mb-0;
+  }
+  .md p {
+    @apply mb-2;
+  }
+  .md strong {
+    @apply font-semibold;
+  }
+  .md em {
+    @apply italic;
+  }
+  .md ul {
+    @apply mb-2 list-disc space-y-0.5 pl-5;
+  }
+  .md ol {
+    @apply mb-2 list-decimal space-y-0.5 pl-5;
+  }
+  .md li {
+    @apply leading-snug;
+  }
+  .md h1,
+  .md h2 {
+    @apply mb-1 mt-3 text-sm font-semibold;
+  }
+  .md h3,
+  .md h4 {
+    @apply mb-1 mt-3 text-[13px] font-semibold;
+  }
+  .md a {
+    @apply text-agilink-600 underline;
+  }
+  .md code {
+    @apply rounded bg-slate-100 px-1 py-0.5 text-[12px];
+  }
+  .md pre {
+    @apply mb-2 overflow-x-auto rounded-lg bg-slate-100 p-2.5 text-[12px];
+  }
+  .md pre code {
+    @apply bg-transparent p-0;
+  }
+  .md table {
+    @apply mb-2 w-full border-collapse text-[12px];
+  }
+  .md th,
+  .md td {
+    @apply border border-slate-200 px-2 py-1 text-left;
+  }
+  .md th {
+    @apply bg-slate-50 font-semibold;
+  }
+  .md blockquote {
+    @apply mb-2 border-l-2 border-slate-200 pl-2 text-slate-500;
+  }
+  .md hr {
+    @apply my-2 border-slate-200;
+  }
 }

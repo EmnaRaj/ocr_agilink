@@ -5,6 +5,13 @@ const BASE = import.meta.env.VITE_API_BASE || "/api";
 
 export type Statut = "extrait" | "en_revue" | "valide";
 
+// Streamed chat events (NDJSON) from POST /chat.
+export type ChatEvent =
+  | { t: "reason"; d: string } // reasoning/thinking tokens
+  | { t: "text"; d: string } // answer tokens
+  | { t: "step"; tool: string; args?: Record<string, unknown> | string; sql?: string; rows?: number; error?: string } // a tool/source used
+  | { t: "error"; d: string };
+
 export interface FicheListItem {
   fiche_id: number;
   ref_produit: string;
@@ -290,10 +297,10 @@ export const api = {
   chatStream: async (
     question: string,
     history: { role: string; content: string }[],
-    onToken: (chunk: string) => void
+    onEvent: (ev: ChatEvent) => void
   ): Promise<void> => {
     // Stateless: context is the client-kept history; nothing is persisted, so the
-    // chat resets on relaunch.
+    // chat resets on relaunch. The response is NDJSON — one JSON event per line.
     const r = await fetch(`${BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -302,11 +309,27 @@ export const api = {
     if (!r.ok || !r.body) throw new Error(`${r.status} ${r.statusText}`);
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
+    let buf = "";
+    const emit = (line: string) => {
+      const s = line.trim();
+      if (!s) return;
+      try {
+        onEvent(JSON.parse(s) as ChatEvent);
+      } catch {
+        /* ignore a partial/garbled line */
+      }
+    };
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      onToken(decoder.decode(value, { stream: true }));
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        emit(buf.slice(0, nl));
+        buf = buf.slice(nl + 1);
+      }
     }
+    emit(buf); // any trailing line
   },
   scan: async (file: File): Promise<ScanResult> => {
     const fd = new FormData();

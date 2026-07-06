@@ -25,11 +25,30 @@ class Settings(BaseSettings):
     # independently of the VLM. chat_base_url/chat_api_key fall back to the vllm_*
     # connection only for backward compatibility when CHAT_* is unset (see
     # app/agent/model.py).
-    # Primary: qwen3-30b-a3b (cheap, strong multilingual + tool-calling).
-    # Fallback if it underperforms: google/gemini-2.5-flash-lite.
-    chat_model: str = "qwen/qwen3-30b-a3b-instruct-2507"
+    # Analytical copilot (specs/003) needs strong text-to-SQL + tool-calling, so the
+    # default is a capable model, not the cheapest. Primary: deepseek/deepseek-v4-pro
+    # (LiveCodeBench #1 → best SQL, best value). A/B alternates (swap via CHAT_MODEL):
+    # z-ai/glm-5.2 (premium, best tool-use bench) or qwen/qwen3.7-plus (cheapest).
+    chat_model: str = "deepseek/deepseek-v4-pro"
     chat_base_url: str | None = None
     chat_api_key: str | None = None
+
+    # Reasoning-model controls. Thinking tokens add latency + cost; for SQL over a
+    # small internal DB, "low" is plenty. Values: low | medium | high | off (off
+    # disables reasoning entirely — faster/cheaper, empty "Raisonnement" panel).
+    # Applied via OpenRouter's `reasoning` param (ignored by non-reasoning backends).
+    chat_reasoning_effort: str = "low"
+    chat_timeout_s: int = 180  # generous request timeout for slow reasoning turns
+
+    # Analytical copilot SQL sandbox (specs/003). The agent's `run_sql` tool runs
+    # generated SELECTs over the read-only analytical views. Guardrails: a SELECT-only
+    # parser, a read-only transaction, a statement timeout, and a row cap.
+    # `readonly_database_url` is an optional defense-in-depth hook: point it at a
+    # dedicated SELECT-only Postgres user and run_sql uses that connection instead of
+    # the app's. If unset, run_sql still enforces read-only at the transaction level.
+    readonly_database_url: str | None = None
+    sql_timeout_ms: int = 5000
+    sql_row_cap: int = 500
 
     api_secret_key: str
     environment: str = "development"

@@ -35,6 +35,16 @@ def test_agent_invokes_tools_via_testmodel(session_factory):
     assert called & {"get_overview", "search_fiches", "get_fiche", "list_review_queue", "get_referential"}
 
 
+def test_agent_exposes_run_sql_and_schema(session_factory):
+    # The analytical tools are registered and callable without crashing the run
+    # (TestModel exercises every tool; run_sql gets a bogus arg → graceful error dict).
+    with agent.override(model=TestModel()):
+        result = agent.run_sync("rapport", deps=Deps(session_factory=session_factory))
+    called = set(_tool_names(result))
+    assert {"run_sql", "describe_schema"} <= called
+    assert isinstance(result.output, str) and result.output
+
+
 def test_run_stream_yields_text(session_factory):
     with agent.override(model=TestModel()):
         out = asyncio.run(_collect(session_factory))
